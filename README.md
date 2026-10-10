@@ -1,163 +1,174 @@
 # Cosmic WA Bot
 
-A stable, plug-and-play WhatsApp bot built on
-[Baileys](https://github.com/WhiskeySockets/Baileys). It supports **both** login
-methods (QR code and pairing code), survives disconnects with automatic
-reconnection, and lets you add features by **dropping a file into a folder** — no
-code edits required.
+A **stable, plug-and-play WhatsApp bot** built on
+[`@whiskeysockets/baileys`](https://github.com/WhiskeySockets/Baileys).
 
-> Built for reliability: an unhandled error in a plugin is caught and logged, and
-> the bot reconnects on its own. No code can promise a literal zero-failure rate
-> (networks drop, WhatsApp changes), so this focuses on **auto-recovery** —
-> nothing routine takes the process down.
+- Dual login: **QR code** *or* **pairing code**
+- Drop-a-file **plugin system** with hot-reload
+- Owner live control from WhatsApp (`!plugin on/off`, `!shutdown`, `!restart`)
+- Polished dynamic `!menu` grouped by category
+- Auto-reconnect with backoff, process-level crash guards, graceful shutdown
+- Optional web keep-alive (`/health`) + token-gated QR / pairing endpoints
 
-## Features
-
-- ✅ **Dual login** — QR code in the terminal *or* an 8-digit pairing code.
-- 🔌 **Plug-and-play plugins** — every `.js` file in `plugins/` becomes a command.
-  Optional **hot-reload**: add or edit a plugin while the bot runs.
-- ♻️ **Auto-reconnect** — exponential backoff with jitter; re-links only on a real
-  `loggedOut`, so transient drops recover silently.
-- 🛡️ **Crash-resistant** — message handling is wrapped in `try/catch`, plus
-  top-level `uncaughtException` / `unhandledRejection` guards.
-- 🤫 **Quiet by default** — Baileys' noisy logs are silenced; you control the app
-  log level.
-- ⚙️ **Config via `.env`** — nothing secret is committed; `auth/` is git-ignored.
-- 🧪 **Tested** — unit tests for the loader (mocked socket) and a syntax check
-  across every file; CI on Node 18/20/22.
-
-## Requirements
-
-- Node.js **>= 18**
-- A WhatsApp account to link (phone with WhatsApp installed)
+> Built for legitimate use. Abusive / spam / nuke / phone-scan features from
+> other bots were **deliberately not ported**.
 
 ## Quick start
 
 ```bash
 git clone https://github.com/cosmichackerx/cosmic-wa-bot.git
 cd cosmic-wa-bot
+cp .env.example .env
+# edit .env — at minimum set OWNER_NUMBER to your digits (country code, no +)
 npm install
-cp .env.example .env     # edit as needed
 npm start
 ```
 
-## Login methods
+### Login
 
-Set `AUTH_METHOD` in `.env`.
+| `AUTH_METHOD` | How it works |
+|---|---|
+| `qr` (default) | A QR is printed in the terminal (and at `/qr?token=…` if `WEB_TOKEN` is set). Scan it in **WhatsApp → Linked devices → Link a device**. |
+| `pairing` | Set `BOT_NUMBER` (digits + country code). The bot prints a pairing code; enter it under **Linked devices → Link with phone number**. You can also hit `/pair?token=…&phone=…`. |
 
-### 1. QR code (default)
+Credentials land in `auth/` (git-ignored). Delete that folder to re-link.
 
-```env
-AUTH_METHOD=qr
+## Commands (plugins)
+
+Every plugin is a single `.js` file in `plugins/`. The menu is generated live
+from whatever is loaded — add a file, and it appears under its `category`.
+
+### Core
+| Command | Description |
+|---|---|
+| `!menu` / `!help` | Polished, category-grouped command list |
+| `!ping` | Latency check |
+| `!echo <text>` | Echo text back |
+| `!systeminfo` | Host RAM / CPU / uptime (no IP) |
+| *(pattern)* `hi` / `hello` / `hey` | Friendly greeting (no prefix) |
+
+### Tools
+| Command | Description |
+|---|---|
+| `!calc <expr>` | Scientific calculator (`sin`, `sqrt`, `log`, `pi`, …) |
+| `!weather <city> [daily]` | Current weather or 5-day forecast (needs `OPENWEATHER_API_KEY`) |
+| `!profile [@user\|reply\|number]` | Profile picture, about, WA status |
+
+### AI
+| Command | Description |
+|---|---|
+| `!groq <q>` / `!ai` | Groq LLM chat (needs `GROQ_API_KEY`). Flags: `--smart`, `--fast`, `--mixtral`, `--gemma` |
+| `!pollai <prompt>` | Free image gen via Pollinations. Flags: `--anime`, `--realistic`, `--3d`, `--digital`, `--portrait`, `--landscape` |
+
+### Admin (owner-only 🔒)
+| Command | Description |
+|---|---|
+| `!plugin list` | Show every plugin and its on/off state |
+| `!plugin on\|off <name>` | Enable / disable a plugin **live** (persisted in `data/state.json`) |
+| `!feature …` | Alias of `!plugin` |
+| `!shutdown` / `!off` | Graceful process exit |
+| `!restart` | Soft reconnect without exiting the process |
+| `!vcf` | Export **this group's** members as a VCF (capped at 200, owner-only) |
+
+### Background listeners (no command; toggleable)
+| Plugin | What it does |
+|---|---|
+| `antidelete` | Forwards "delete for everyone" messages to the owner |
+| `autostatus` | Auto-views statuses (optional reaction via `AUTO_STATUS_REACT=true`) |
+| `autotyping` | Optional typing/recording presence (`AUTO_TYPING=true`) |
+
+## Owner live control
+
+Set `OWNER_NUMBER` (digits, country code, comma-separated for several owners).
+Without it, control commands refuse to run — so a public bot can't be shut down
+by strangers.
+
+```
+!plugin list
+!plugin off weather
+!plugin on weather
+!restart
+!shutdown
 ```
 
-Run `npm start`. A QR code is printed in the terminal. On your phone open
-**WhatsApp → Linked devices → Link a device** and scan it.
+Disabled plugins stop matching commands **and** stop their listeners. The
+choice is written to `data/state.json` (git-ignored) and reloaded on the next
+start. The `control` plugin itself cannot be disabled (that would lock you out).
 
-### 2. Pairing code
+## Adding a plugin
 
-```env
-AUTH_METHOD=pairing
-BOT_NUMBER=923001234567   # your number, country code first, digits only
-```
-
-Run `npm start`. The bot prints an 8-digit code like `ABCD-EFGH`. On your phone
-open **WhatsApp → Linked devices → Link with phone number** and enter it.
-
-Either way, the session is saved in `auth/` (git-ignored). You only link once;
-later restarts reuse the saved session.
-
-## Writing a plugin (the plug-and-play part)
-
-Create a new file in `plugins/`, e.g. `plugins/time.js`:
+Drop a file into `plugins/`. Hot-reload picks it up with no restart.
 
 ```js
+// plugins/greet.js
 export default {
-  name: 'time',                       // unique id (defaults to filename)
-  description: 'Shows the current time',
-  command: 'time',                    // a string or an array of strings
-  // pattern: /^what time/i,          // optional: trigger without a prefix
-  // adminOnly: true,                 // optional: restrict to OWNERS
+  name: 'greet',
+  description: 'Greets a person by name',
+  category: 'Fun',                 // shows up under this heading in !menu
+  command: ['greet', 'hi-user'],   // !greet Alice
+  // pattern: /^yo\b/i,            // or match without a prefix
+  // adminOnly: true,              // restrict to OWNER_NUMBER
+  // hidden: true,                 // hide from !menu
   async execute(ctx) {
-    await ctx.reply('🕒 ' + new Date().toString());
+    const who = ctx.args[0] || 'friend';
+    await ctx.reply(`👋 Hey ${who}!`);
   },
+  // Optional: run on EVERY message (status, deletes, etc.)
+  // async listen(ctx) { … }
 };
 ```
 
-Save it. With `HOT_RELOAD=true` it registers instantly; otherwise restart. That's
-it — the loader auto-discovers every `.js` file on startup.
+`ctx` gives you `sock`, `msg`, `from`, `sender`, `args`, `prefix`, `plugins`,
+`bot`, `config`, `isOwner`, `reply()`, `react()`, and `logger`. Wrap your own
+logic in `try/catch` — the bot already isolates plugin failures so one bad
+plugin cannot crash the process.
 
-### The `ctx` object passed to `execute`
+## Environment
 
-| Field | Description |
-| --- | --- |
-| `ctx.sock` | The live Baileys socket. |
-| `ctx.msg` | The raw incoming message. |
-| `ctx.from` | Chat JID the message came from. |
-| `ctx.sender` | JID of the actual sender (useful in groups). |
-| `ctx.text` | Full message text. |
-| `ctx.args` | Words after the command, e.g. `!echo a b` → `['a','b']`. |
-| `ctx.command` | The command name that matched. |
-| `ctx.prefix` | The configured command prefix. |
-| `ctx.plugins` | The live plugin manager (used by `help`). |
-| `ctx.reply(text|content)` | Replies, quoting the user's message. |
-| `ctx.logger` | Shared pino logger. |
+See [`.env.example`](./.env.example). Important keys:
 
-### Bundled example plugins
+| Variable | Purpose |
+|---|---|
+| `AUTH_METHOD` | `qr` or `pairing` |
+| `BOT_NUMBER` | Required for pairing login |
+| `OWNER_NUMBER` | Owner phone(s); gates admin commands |
+| `PREFIX` | Command prefix (default `!`) |
+| `GROQ_API_KEY` | Enables `!groq` |
+| `OPENWEATHER_API_KEY` | Enables `!weather` |
+| `WEB_SERVER` / `PORT` | Keep-alive HTTP server (default on, port 3000) |
+| `WEB_TOKEN` | If set, unlocks `/qr` and `/pair` |
+| `STATE_FILE` | Where plugin on/off state is saved |
+| `HTTP_TIMEOUT_MS` | Timeout for outbound HTTP (default 20000) |
 
-| Command | What it does |
-| --- | --- |
-| `!ping` | Replies `pong`. |
-| `!echo <text>` / `!say` | Echoes your text back. |
-| `!help` / `!menu` | Lists every loaded plugin. |
-| `hi` / `hello` / `hey` | Pattern plugin — greets back without a prefix. |
+Features that need a key **disable themselves with a clear reply** when the key
+is missing — they never crash the bot.
 
-## Environment variables
+## Deploy
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `AUTH_METHOD` | `qr` | `qr` or `pairing`. |
-| `BOT_NUMBER` | — | Required for pairing; country code first, digits only. |
-| `PREFIX` | `!` | Command prefix. |
-| `AUTH_DIR` | `auth` | Where credentials are stored (git-ignored). |
-| `PLUGINS_DIR` | `plugins` | Folder the loader scans. |
-| `HOT_RELOAD` | `true` | Reload plugins on file add/change. |
-| `LOG_LEVEL` | `info` | `fatal`…`trace` or `silent`. |
-| `OWNERS` | — | Comma-separated JIDs allowed to run `adminOnly` plugins (empty = everyone). |
+- **Local / VPS:** `npm start`
+- **Docker:** `docker build -t cosmic-wa-bot . && docker run --env-file .env -p 3000:3000 cosmic-wa-bot`
+- **Render:** `render.yaml` is included; set env vars in the dashboard. `/health` is the health check.
 
-## Scripts
+## Development
 
 ```bash
-npm start      # run the bot
-npm run dev    # run with --watch (restart on source change)
-npm run check  # node --check across every .js file
-npm test       # unit tests (node:test)
+npm run check   # node --check on every .js file
+npm test        # plugin loader + calculator unit tests
+npm run dev     # node --watch
 ```
 
-## Deployment
+## What was deliberately NOT ported
 
-- **Docker:** `docker build -t cosmic-wa-bot . && docker run -it -v $(pwd)/auth:/app/auth cosmic-wa-bot`
-  (the volume keeps your session). Do the first link interactively.
-- **Render:** `render.yaml` defines a worker with a persistent disk for `auth/`.
+From `cosmichackerx/X-Bot`, the following were inspected and **excluded by
+design** (they attack, spam, or mass-enumerate other people):
 
-## Troubleshooting
+`bannuke`, `chatnuke`, `stealthchatnuke`, `mentionnuke`, `spamflood`, `blast`,
+`jumpblast`, `randomswarm`, `sender`, `gridscan`, `sequentialscan`,
+`patternhunt`, `neighbours`, `carrierhunt`, `subdomain`.
 
-- **Keeps asking to scan / `loggedOut`:** the session was invalidated. Delete the
-  `auth/` folder and link again.
-- **Pairing code never appears:** make sure `BOT_NUMBER` is set, digits only, with
-  the country code, and `AUTH_METHOD=pairing`.
-- **`Connection closed` loops:** usually transient; the bot backs off and retries.
-  If it persists, update Baileys (`npm update @whiskeysockets/baileys`).
-- **Plugin didn't load:** check the startup log for a `failed to load plugin`
-  line — it names the file and the error.
-- **Nothing happens on a command:** confirm your `PREFIX` and that the plugin's
-  `command` matches what you typed.
-
-## Security
-
-- `auth/`, `.env`, `node_modules/`, and credential/session files are git-ignored.
-- Never commit your `auth/` folder or `.env` — they grant access to your account.
+`automation.js` was also skipped: it auto-spams hardcoded commands (`#w`,
+`#d all`, `#daily`) into a fixed group JID on timers — not benign scheduling.
 
 ## License
 
-[MIT](LICENSE) © cosmichackerx
+MIT © cosmichackerx

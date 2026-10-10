@@ -1,6 +1,7 @@
 node_modules
 auth
 session
+data
 .env
 .git
 *.log

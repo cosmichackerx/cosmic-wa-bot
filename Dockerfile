@@ -11,7 +11,7 @@ RUN npm install --omit=dev
 COPY . .
 
 # Persist WhatsApp credentials across restarts.
-VOLUME ["/app/auth"]
+VOLUME ["/app/auth", "/app/data"]
 
 ENV NODE_ENV=production
 CMD ["node", "index.js"]

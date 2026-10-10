@@ -1,7 +1,6 @@
 # Render.com blueprint. A background worker keeps the bot connected.
-# Note: pairing/QR login needs a one-time interactive link. Do the first link
-# locally, then commit nothing secret — mount or persist the auth/ folder on a
-# disk so the worker reuses the session.
+# Do the first QR/pairing link locally, then mount the auth/ folder on a
+# persistent disk so the worker reuses the session. Never commit secrets.
 services:
   - type: worker
     name: cosmic-wa-bot
@@ -16,7 +15,15 @@ services:
         value: "!"
       - key: LOG_LEVEL
         value: info
+      - key: WEB_SERVER
+        value: "false"
       - key: BOT_NUMBER
+        sync: false
+      - key: OWNER_NUMBER
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENWEATHER_API_KEY
         sync: false
     disk:
       name: auth

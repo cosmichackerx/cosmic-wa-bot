@@ -29,3 +29,6 @@ Thumbs.db
 # Build
 dist/
 build/
+
+# Runtime state (plugin enable/disable, etc.)
+data/
