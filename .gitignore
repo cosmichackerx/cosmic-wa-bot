@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Environment / secrets
+.env
+.env.local
+*.local
+
+# WhatsApp auth / session state (NEVER commit these)
+auth/
+session/
+sessions/
+*.session
+baileys_store*.json
+store.json
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Build
+dist/
+build/

@@ -1,0 +1,24 @@
+# Render.com blueprint. A background worker keeps the bot connected.
+# Note: pairing/QR login needs a one-time interactive link. Do the first link
+# locally, then commit nothing secret — mount or persist the auth/ folder on a
+# disk so the worker reuses the session.
+services:
+  - type: worker
+    name: cosmic-wa-bot
+    runtime: node
+    plan: starter
+    buildCommand: npm install --omit=dev
+    startCommand: node index.js
+    envVars:
+      - key: AUTH_METHOD
+        value: qr
+      - key: PREFIX
+        value: "!"
+      - key: LOG_LEVEL
+        value: info
+      - key: BOT_NUMBER
+        sync: false
+    disk:
+      name: auth
+      mountPath: /app/auth
+      sizeGB: 1
