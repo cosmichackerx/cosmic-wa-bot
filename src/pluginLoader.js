@@ -10,24 +10,34 @@ import logger from './logger.js';
  * whose default export (or named `plugin` export) is an object:
  *
  *   export default {
- *     name: 'ping',                 // unique id (defaults to filename)
- *     description: 'Replies pong',  // shown by the help plugin
- *     command: 'ping',              // string or string[] that triggers it
- *     pattern: /^hi$/i,             // optional regex alternative to command
- *     adminOnly: false,             // optional, restricts to OWNERS
- *     async execute(ctx) { ... }    // handler; see ctx shape in README
+ *     name: 'ping',               // optional, defaults to filename
+ *     description: 'Replies pong',
+ *     category: 'Core',           // optional, groups the command in the menu
+ *     command: 'ping',            // string or array; omit for a listener-only plugin
+ *     pattern: /^hi\b/i,          // optional regex trigger (no prefix needed)
+ *     adminOnly: false,           // optional, restrict to owners
+ *     hidden: false,              // optional, hide from the menu
+ *     async execute(ctx) { ... }, // command/pattern handler
+ *     async listen(ctx) { ... },  // optional background listener (every message)
  *   }
  *
  * Drop a file in, and it becomes part of the bot. With HOT_RELOAD on, adding or
  * editing a file re-registers it live, no restart needed.
+ *
+ * Plugins can be toggled on/off at runtime; disabled plugins are skipped by
+ * `match()` and `listeners()` and the disabled set is persisted to a small,
+ * git-ignored JSON state file so the choice survives a restart.
  */
 export class PluginManager {
-  constructor({ dir, hotReload = true } = {}) {
+  constructor({ dir, hotReload = true, stateFile = null } = {}) {
     this.dir = path.resolve(dir);
     this.hotReload = hotReload;
+    this.stateFile = stateFile ? path.resolve(stateFile) : null;
     this.plugins = new Map(); // name -> plugin
     this.byFile = new Map(); // absolute file path -> name
+    this.disabled = new Set(); // names disabled at runtime
     this.watcher = null;
+    this._loadState();
   }
 
   /** Validate and normalise a raw module export into a plugin object. */
@@ -37,8 +47,12 @@ export class PluginManager {
       throw new Error('plugin must export an object (default export)');
     }
     const name = p.name || path.basename(file, path.extname(file));
-    if (typeof p.execute !== 'function') {
-      throw new Error(`plugin "${name}" is missing an execute(ctx) function`);
+    const hasExecute = typeof p.execute === 'function';
+    const hasListen = typeof p.listen === 'function';
+    if (!hasExecute && !hasListen) {
+      throw new Error(
+        `plugin "${name}" must define execute(ctx) and/or listen(ctx)`,
+      );
     }
     const commands = []
       .concat(p.command || [])
@@ -47,10 +61,13 @@ export class PluginManager {
     return {
       name,
       description: p.description || '',
+      category: p.category || 'General',
       commands,
       pattern: p.pattern instanceof RegExp ? p.pattern : null,
       adminOnly: Boolean(p.adminOnly),
-      execute: p.execute,
+      hidden: Boolean(p.hidden),
+      execute: hasExecute ? p.execute : null,
+      listen: hasListen ? p.listen : null,
     };
   }
 
@@ -125,9 +142,72 @@ export class PluginManager {
     return [...this.plugins.values()];
   }
 
-  /** Find the plugin that matches a prefixed command or a pattern. */
+  get(name) {
+    return this.plugins.get(name) || null;
+  }
+
+  // ---- runtime enable/disable -------------------------------------------
+
+  isEnabled(name) {
+    return !this.disabled.has(name);
+  }
+
+  enable(name) {
+    if (!this.plugins.has(name)) return false;
+    if (this.disabled.delete(name)) this._saveState();
+    return true;
+  }
+
+  disable(name) {
+    if (!this.plugins.has(name)) return false;
+    if (!this.disabled.has(name)) {
+      this.disabled.add(name);
+      this._saveState();
+    }
+    return true;
+  }
+
+  _loadState() {
+    if (!this.stateFile) return;
+    try {
+      if (fs.existsSync(this.stateFile)) {
+        const raw = JSON.parse(fs.readFileSync(this.stateFile, 'utf8'));
+        if (Array.isArray(raw?.disabled)) {
+          this.disabled = new Set(raw.disabled.map(String));
+        }
+      }
+    } catch (err) {
+      logger.warn({ err: err.message }, 'could not read plugin state file');
+    }
+  }
+
+  _saveState() {
+    if (!this.stateFile) return;
+    try {
+      fs.mkdirSync(path.dirname(this.stateFile), { recursive: true });
+      fs.writeFileSync(
+        this.stateFile,
+        JSON.stringify({ disabled: [...this.disabled] }, null, 2),
+      );
+    } catch (err) {
+      logger.warn({ err: err.message }, 'could not write plugin state file');
+    }
+  }
+
+  // ---- lookups -----------------------------------------------------------
+
+  /** Enabled plugins that have a background listener. */
+  listeners() {
+    return [...this.plugins.values()].filter(
+      (p) => p.listen && this.isEnabled(p.name),
+    );
+  }
+
+  /** Find the enabled plugin that matches a prefixed command or a pattern. */
   match({ isCommand, commandName, text }) {
     for (const p of this.plugins.values()) {
+      if (!p.execute) continue;
+      if (!this.isEnabled(p.name)) continue;
       if (isCommand && p.commands.includes(commandName)) return { plugin: p };
       if (!isCommand && p.pattern && p.pattern.test(text)) return { plugin: p };
     }
