@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.2.1 — 2026-10-10
+
+### Removed
+- WhatsApp-side `!shutdown` / `!off` / `!restart` commands. Process lifecycle
+  is host-only (SIGINT/SIGTERM, process manager). Owner live control now
+  covers only `!plugin` / `!feature` on/off/list (still persisted).
+
 ## v0.2.0 — 2026-10-10
 
 ### Added
@@ -7,9 +14,10 @@
   plugins against this bot's API:
   `menu`, `calculator`, `weather`, `groq`, `pollai`, `profile`, `systeminfo`,
   `antidelete`, `autostatus`, `autotyping`, `vcf`.
-- Owner live control plugin (`control`): `!plugin on/off/list`, `!feature …`,
-  `!shutdown` / `!off`, `!restart`. Runtime enable/disable is persisted in
-  `data/state.json` (git-ignored) and survives restarts.
+- Owner live control plugin (`control`): `!plugin on/off/list`, `!feature …`.
+  Runtime enable/disable is persisted in `data/state.json` (git-ignored) and
+  survives restarts. (WhatsApp shutdown/restart commands were removed in
+  v0.2.1.)
 - Polished dynamic `!menu` / `!help` grouped by each plugin's `category`.
 - Optional Express keep-alive server (`/`, `/health`) with token-gated
   `/qr` and `/pair` endpoints (adapted from X-Bot's `lib/server.js`).

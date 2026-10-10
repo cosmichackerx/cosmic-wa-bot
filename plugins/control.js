@@ -5,17 +5,19 @@
  *   !plugin on  <name>           — enable a plugin (persisted)
  *   !plugin off <name>           — disable a plugin (persisted)
  *   !feature on|off|list …       — alias of !plugin
- *   !shutdown / !off             — graceful process exit
- *   !restart                     — soft reconnect without exiting
+ *
+ * There is intentionally NO WhatsApp command to shut down or restart the
+ * process. Process lifecycle is handled only by the host (SIGINT/SIGTERM,
+ * process manager, etc.).
  *
  * Requires at least one OWNER_NUMBER. The bot refuses these commands when no
- * owner is configured, so an open bot can't be shut down by strangers.
+ * owner is configured, so an open bot can't be reconfigured by strangers.
  */
 export default {
   name: 'control',
-  description: 'Owner live control: plugin on/off, list, shutdown, restart',
+  description: 'Owner live control: plugin on/off and list/status',
   category: 'Admin',
-  command: ['plugin', 'feature', 'plugins', 'shutdown', 'off', 'restart'],
+  command: ['plugin', 'feature', 'plugins'],
   adminOnly: true,
   async execute(ctx) {
     try {
@@ -31,15 +33,7 @@ export default {
         return;
       }
 
-      switch (ctx.command) {
-        case 'shutdown':
-        case 'off':
-          return shutdown(ctx);
-        case 'restart':
-          return restart(ctx);
-        default:
-          return pluginCmd(ctx);
-      }
+      await pluginCmd(ctx);
     } catch (err) {
       ctx.logger.error({ err: err.message }, 'control error');
       await ctx.reply('❌ Control command failed: ' + err.message);
@@ -114,29 +108,6 @@ async function pluginCmd(ctx) {
     `Usage:\n` +
       `• ${ctx.prefix}plugin list\n` +
       `• ${ctx.prefix}plugin on <name>\n` +
-      `• ${ctx.prefix}plugin off <name>\n` +
-      `• ${ctx.prefix}shutdown\n` +
-      `• ${ctx.prefix}restart`,
+      `• ${ctx.prefix}plugin off <name>`,
   );
-}
-
-async function shutdown(ctx) {
-  await ctx.reply('🛑 Shutting down gracefully…');
-  // Give the reply a moment to flush before we tear the socket down.
-  setTimeout(async () => {
-    try {
-      await ctx.bot.shutdown();
-    } finally {
-      process.exit(0);
-    }
-  }, 750);
-}
-
-async function restart(ctx) {
-  await ctx.reply('🔄 Soft-restarting the WhatsApp connection…');
-  setTimeout(() => {
-    ctx.bot.restart().catch((err) =>
-      ctx.logger.error({ err: err.message }, 'restart failed'),
-    );
-  }, 500);
 }

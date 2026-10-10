@@ -5,7 +5,7 @@ A **stable, plug-and-play WhatsApp bot** built on
 
 - Dual login: **QR code** *or* **pairing code**
 - Drop-a-file **plugin system** with hot-reload
-- Owner live control from WhatsApp (`!plugin on/off`, `!shutdown`, `!restart`)
+- Owner live control from WhatsApp (`!plugin on/off/list` — no remote shutdown)
 - Polished dynamic `!menu` grouped by category
 - Auto-reconnect with backoff, process-level crash guards, graceful shutdown
 - Optional web keep-alive (`/health`) + token-gated QR / pairing endpoints
@@ -64,10 +64,8 @@ from whatever is loaded — add a file, and it appears under its `category`.
 | Command | Description |
 |---|---|
 | `!plugin list` | Show every plugin and its on/off state |
-| `!plugin on\|off <name>` | Enable / disable a plugin **live** (persisted in `data/state.json`) |
+| `!plugin on/off <name>` | Enable / disable a plugin **live** (persisted in `data/state.json`) |
 | `!feature …` | Alias of `!plugin` |
-| `!shutdown` / `!off` | Graceful process exit |
-| `!restart` | Soft reconnect without exiting the process |
 | `!vcf` | Export **this group's** members as a VCF (capped at 200, owner-only) |
 
 ### Background listeners (no command; toggleable)
@@ -80,16 +78,17 @@ from whatever is loaded — add a file, and it appears under its `category`.
 ## Owner live control
 
 Set `OWNER_NUMBER` (digits, country code, comma-separated for several owners).
-Without it, control commands refuse to run — so a public bot can't be shut down
+Without it, control commands refuse to run — so a public bot can't be reconfigured
 by strangers.
 
 ```
 !plugin list
 !plugin off weather
 !plugin on weather
-!restart
-!shutdown
 ```
+
+> There is **no** WhatsApp command to shut down or restart the process.
+> Stop the bot from your host (Ctrl+C, `systemctl`, Render dashboard, etc.).
 
 Disabled plugins stop matching commands **and** stop their listeners. The
 choice is written to `data/state.json` (git-ignored) and reloaded on the next

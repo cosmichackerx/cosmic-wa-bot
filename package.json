@@ -1,7 +1,7 @@
 {
   "name": "cosmic-wa-bot",
-  "version": "0.2.0",
-  "description": "A stable, plug-and-play WhatsApp bot built on Baileys with QR + pairing-code login, hot-reloading plugins, and owner live control.",
+  "version": "0.2.1",
+  "description": "A stable, plug-and-play WhatsApp bot built on Baileys with QR + pairing-code login, hot-reloading plugins, and owner live plugin control.",
   "type": "module",
   "main": "index.js",
   "engines": {

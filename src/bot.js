@@ -288,26 +288,6 @@ export class CosmicBot {
     await plugin.execute(ctx);
   }
 
-  /** Soft restart: drop the current socket and reconnect from saved creds. */
-  async restart() {
-    logger.info('restart requested');
-    this.reconnectAttempts = 0;
-    try {
-      await this.sock?.ws?.close();
-    } catch {
-      /* ignore */
-    }
-    // handleClose will fire from the socket close and reconnect; if it does not
-    // (e.g. socket already gone), start explicitly after a short delay.
-    setTimeout(() => {
-      if (!this.sock || this.sock.ws?.readyState !== 1) {
-        this.start().catch((err) =>
-          logger.error({ err: err.message }, 'restart reconnect failed'),
-        );
-      }
-    }, 2_000);
-  }
-
   async shutdown() {
     this.stopping = true;
     this.plugins.stop();
