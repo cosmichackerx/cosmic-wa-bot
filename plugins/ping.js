@@ -1,7 +1,7 @@
-// Simplest possible plugin: replies with latency.
 export default {
   name: 'ping',
-  description: 'Replies with pong and round-trip time',
+  description: 'Check latency (round-trip)',
+  category: 'Core',
   command: 'ping',
   async execute(ctx) {
     const start = Date.now();
